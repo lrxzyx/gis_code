@@ -1,0 +1,216 @@
+---
+title: 
+author: "Name: Ruixuan Li"
+- |
+    | Student number: 24221917
+date: "`r format(Sys.time(), '%X, %d %B, %Y')`"
+output: html_document
+---
+# Originality declaration  
+
+I, [Ruixuan Li], confirm that the work presented in this assessment is my own. Where information has been derived from other sources, I confirm that this has been indicated in the work.
+
+date: `r format(Sys.time(), '%d %B, %Y')`
+
+Introduction
+
+
+# Start your response here
+```{r}
+# load libraries
+library(readr)
+library(ggplot2)
+library(sf)
+library(tidyverse)
+library(spdep)
+library(spatstat)
+library(sp)
+library(tmap)
+library(spdep)
+library(janitor)
+```
+research question:hat are the factors that might lead to variation in Graffiti occurrence across the city? 
+
+
+
+```{r}
+households_families <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/\ Households\ and\ Families\ .csv")
+
+poverty_data <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/povety.csv")
+
+graffiti_points <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Graffiti\ points.csv")
+
+census_tract_data <- 
+read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Census\ tract\ spatial\ data.csv") 
+
+education_data <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Educational\ Attainment.csv")
+```
+
+```{r}
+#join the factor data
+factor_data <- left_join(households_families,poverty_data, education_data,by=c("GEO_ID"="GEO_ID"))
+```
+
+```{r}
+colnames(factor_data)
+
+```
+
+```{r}
+#join all the data
+factor_census <- left_join(census_tract_data,factor_data,
+            by = c("Geographic Area Name (NAME)" = "NAME.x"))
+
+```
+
+```{r}
+colnames(factor_census)
+```
+```{r}
+#rename the colname
+factor_census <- factor_census %>% 
+  rename("Total households"="S1101_C01_001E",
+        "Average household size"="S1101_C01_002E",
+          "Geographic Area Name"="NAME.y",
+          "Population for whom poverty status is determined"="S1701_C01_001E")
+```
+
+
+```{r}
+library(stringr)
+
+# Extract latitude and longitude and create a new column
+graffiti_points <- graffiti_points %>%
+  mutate(
+    longitude = str_extract(Point, "(?<=\\().*?(?=\\,)") %>% as.numeric(),
+    latitude = str_extract(Point, "(?<=\\, ).*?(?=\\))") %>% as.numeric()
+  )
+
+#(?<=\\().*?(?=\\,) Extract the part between the left parenthesis (and comma) from the string (?<=...)(Lookbehind)  (?=...) (Lookahead)
+```
+
+```{r}
+graffiti_points <- graffiti_points %>%
+  filter(!is.na(longitude) & !is.na(latitude))
+```
+
+
+```{r}
+#visualise graffiti_points
+library(sf)
+
+# 转换为 sf 对象
+graffiti_sf <- st_as_sf(
+  graffiti_points,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+# 查看转换结果
+print(graffiti_sf)
+
+```
+```{r}
+any(is.na(as.numeric(factor_census$Longitude)))
+any(is.na(as.numeric(factor_census$Latitude)))
+
+factor_census <- factor_census %>%
+  filter(!is.na(Longitude) & !is.na(Latitude))
+
+factor_census <- factor_census %>%
+  mutate(
+    Longitude = as.numeric(gsub("−", "-", Longitude)),  # 替换特殊负号并转换为数值
+    Latitude = as.numeric(gsub("−", "-", Latitude))    # 如果 Latitude 也有特殊负号，可以一并处理
+  )
+
+
+```
+```{r}
+factor_census <- st_as_sf(factor_census, coords = c("Longitude", "Latitude"), crs = 4326)
+```
+
+```{r}
+# 检查涂鸦点范围
+st_bbox(graffiti_sf)
+
+# 检查普查区域范围
+st_bbox(factor_census)
+```
+
+
+
+```{r}
+overlap <- st_within(graffiti_sf, factor_census)
+if (!any(lengths(overlap) > 0)) {
+  print("No graffiti points fall within census tracts.")
+}
+```
+
+
+```{r}
+# 计算每个普查区域的涂鸦数量
+graffiti_count <- graffiti_within_tracts %>%
+  group_by(CaseID) %>%
+  summarise(graffiti_count = n())
+```
+
+
+```{r}
+# 将涂鸦数量加入综合数据集
+merged_data <- merged_data %>%
+  left_join(graffiti_count, by = "tract_id") %>%
+  mutate(graffiti_count = replace_na(graffiti_count, 0))
+
+# 可视化涂鸦热点
+ggplot(merged_data) +
+  geom_sf(aes(fill = graffiti_count)) +
+  scale_fill_viridis_c() +
+  labs(title = "Graffiti Hotspots in San Francisco",
+       fill = "Graffiti Count") +
+  theme_minimal()
+```
+
+```{r}
+# 简单回归分析
+model <- lm(graffiti_count ~ poverty_rate + education_level, data = merged_data)
+summary(model)
+
+# 可视化关系
+ggplot(merged_data, aes(x = poverty_rate, y = graffiti_count)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "Graffiti Count vs Poverty Rate",
+       x = "Poverty Rate (%)",
+       y = "Graffiti Count") +
+  theme_minimal()
+```
+
+
+```{r}
+ggplot() +
+  geom_sf(data = census_spatial, fill = "white", color = "black") +
+  geom_sf(data = graffiti_sf, color = "red", size = 1) +
+  labs(title = "Graffiti Incidents in San Francisco",
+       subtitle = "Based on 2004 Data") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(merged_data) +
+  geom_sf(aes(fill = poverty_rate)) +
+  geom_point(data = graffiti_sf, aes(geometry = geometry), color = "red", size = 1) +
+  scale_fill_viridis_c() +
+  labs(title = "Poverty Rate and Graffiti Incidents",
+       fill = "Poverty Rate (%)") +
+  theme_minimal()
+```
+
+
+
+## Initial project scope
+6. 关键发现和结论
+在最终报告中总结关键发现，例如：
+
+涂鸦热点主要集中在某些区域。
+贫困率和教育水平与涂鸦数量存在显著关联。
+建议城市立法者采取主动措施，例如增加社区资源或加强高风险区域的监控。

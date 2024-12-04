@@ -1,0 +1,215 @@
+author: "Name: Ruixuan Li"
+- |
+    | Student number: 24221917
+date: "`r format(Sys.time(), '%X, %d %B, %Y')`"
+output: html_document
+---
+# Originality declaration  
+
+I, [Ruixuan Li], confirm that the work presented in this assessment is my own. Where information has been derived from other sources, I confirm that this has been indicated in the work.
+
+date: `r format(Sys.time(), '%d %B, %Y')`
+
+Introduction
+
+
+# Start your response here
+```{r}
+# load libraries
+library(readr)
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(spdep)
+library(spatstat)
+library(sp)
+library(tmap)
+library(tmaptools)
+library(janitor)
+
+```
+
+```{r}
+eiction_points <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Evictions_point.csv",na=c(" "))
+
+communty_areas <- st_read("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Community\ Districts/geo_export_0a5618ad-899c-4ac0-b2e2-bc3af6b4ae24.shp")
+```
+```{r}
+points <- eiction_points %>%
+  filter(Longitude<0 & Latitude>0)%>%
+  st_as_sf(.,coords = c("Longitude","Latitude"),
+           crs=4326)
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(communty_areas)+
+  tm_polygons(col=NA,alpha = 0.5)+
+tm_shape(points)+
+  tm_dots(col="blue")
+```
+
+```{r}
+communty_areas <- communty_areas%>%
+  st_transform(.,4326)
+points_sub<- points[communty_areas, ] #,st_intersects()
+```
+
+```{r}
+points_sub_2020 <-points_sub%>%
+  clean_names()%>%
+  filter(str_detect(executed_date,"2020"))%>%
+  filter(residential_commercial=="Residential")
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(communty_areas)+
+  tm_polygons(col=NA,alpha = 0.5)+
+tm_shape(points_sub_2020)+
+  tm_dots(col="blue")
+```
+
+
+```{r}
+communty_areas_projected <- communty_areas %>%
+  st_transform(.,6538)
+points_sub_2020_projected <- points_sub_2020 %>%
+  st_transform(.,6538)
+
+window <- as.owin(communty_areas_projected) 
+plot(window)
+
+# create a sp object 
+points_sub_2020_projected_sp <- points_sub_2020_projected %>%
+  as(.,"Spatial")
+#create a ppp object
+points_sub_2020_projected_sp.ppp <-
+ppp(x=points_sub_2020_projected_sp@coords[,1],
+    y=points_sub_2020_projected_sp@coords[,2],
+    window =window)
+```
+
+```{r}
+K <- points_sub_2020_projected_sp.ppp %>%
+  Kest(.,correction="border") %>%
+  plot()
+```
+
+
+```{r}
+library(sp)
+library(dbscan)
+library(fpc)
+
+#first extract the points from the spatial data frame
+points_todf <- points_sub_2020_projected_sp %>%
+coordinates(.) %>%
+as.data.frame()
+
+#now run the dbscan analysis
+points_todf_DBSCAN <- points_todf %>%
+fpc::dbscan(.,eps=1000,MinPts=50)
+
+points_todf %>%
+dbscan::kNNdistplot(.,k=50)
+ 
+plot(points_todf_DBSCAN,points_todf,main="DBSCAN output",frame=F)
+plot(communty_areas_projected$geometry,add=T)
+```
+
+
+   
+```{r}
+tosf <- points_todf %>%
+st_as_sf(., coords = c("coords.x1","coords.x2"),
+crs =6538) %>%
+  filter(dbcluster>0)
+```
+
+
+```{r}
+ggplot(data = communty_areas_projected)+
+  geom_sf()+
+  geom_sf(data=tosf,size= 0.4,color=tosf$dbcluster,
+          fill=tosf$dbcluster)
+  
+```
+
+```{r}
+check_example <- communty_areas_projected%>%
+  st_join(tosf)
+
+points_sf_joined <- communty_areas_projected%>%
+  mutate(n=lengths(st_intersects(.,tosf)))%>%
+  clean_names()%>%
+  mutate(area=st_area(.)) %>%
+  mutate(density=n/area)
+```
+
+```{r}
+tm_shape(points_sf_joined)+
+  tm_polygons("density",
+              style="jenks",
+              palette="PuOr",
+              title="Eviction density")
+```
+
+```{r}
+library(spdep)
+coordsw <-points_sf_joined %>%
+  st_centroid()%>%
+  st_geometry()
+plot(coordsw,axes=TRUE)
+
+#make neighbours
+
+community_nb <- points_sf_joined %>%
+  poly2nb(.,queen=T)
+summary(community_nb)
+
+plot(community_nb,st_geometry(coordsw),col="red")
+plot(points_sf_joined$geometry,add=T)
+
+```
+
+```{r}
+#make weight matrix
+community_nb.lw <- community_nb %>%
+  nb2mat(.,style ="W")
+
+sum(community_nb.lw)
+
+```
+
+```{r}
+community_nb.lw <- nb2listw(community_nb, zero.policy = TRUE)
+```
+
+```{r}
+I_LWard_Global_Density <- points_sf_joined %>%
+  pull(density)%>%
+  as.vector()%>%
+  localmoran(.,community_nb.lw)
+I_LWard_Global_Density
+```
+```{r}
+points_sf_joined <- points_sf_joined %>%
+  mutate(density_I = as.numeric(I_LWard_Global_Density$Ii)) %>%
+  mutate(density_Iz =as.numeric(I_LWard_Global_Density$Z,Ii))
+```
+```{r}
+breaks1 <-(-100,-2.58,-1.96,-1.65,1.65,1.96,2.58,1000)
+
+library(RColorBrewer)
+MoranColours<- rev(brewer.pal(8, "RdGy"))
+
+tm_shape(points_sf_joined) +
+    tm_polygons("density_Iz",
+        style="fixed",
+        breaks=breaks1,
+        palette=MoranColours,
+        midpoint=NA,
+        title="Local Moran's I, Evictions in New York")
+```
+

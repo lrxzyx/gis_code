@@ -1,0 +1,385 @@
+author: "Name: Ruixuan Li"
+- |
+    | Student number: 24221917
+date: "`r format(Sys.time(), '%X, %d %B, %Y')`"
+output: html_document
+---
+# Originality declaration  
+
+I, [Ruixuan Li], confirm that the work presented in this assessment is my own. Where information has been derived from other sources, I confirm that this has been indicated in the work.
+
+date: `r format(Sys.time(6 12，2024), '%d %B, %Y')`
+
+Research Question
+How do eviction patterns in New York City vary spatially, and which areas exhibit significant clustering of high or low eviction densities?
+
+
+Introduction
+Evictions are a pressing issue in New York City, disrupting lives and destabilizing communities, particularly in low-income areas. Understanding the spatial patterns of evictions is crucial for developing effective, targeted policies to address housing instability.
+
+This study analyzes the 2020 eviction data across New York City’s community districts, focusing on identifying clusters of high and low eviction densities using Local Moran’s I. The goal is to uncover geographic hotspots and coldspots of eviction activity, providing insights to guide policy interventions aimed at reducing evictions and supporting at-risk communities.
+
+# Start your response here
+```{r}
+# load libraries
+library(readr)
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(spdep)
+library(spatstat)
+library(sp)
+library(tmap)
+library(tmaptools)
+library(janitor)
+
+```
+
+```{r}
+eiction_points <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Evictions_point.csv",na=c(" "))
+
+communty_areas <- st_read("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/Community\ Districts/geo_export_0a5618ad-899c-4ac0-b2e2-bc3af6b4ae24.shp")
+```
+```{r}
+points <- eiction_points %>%
+  filter(Longitude<0 & Latitude>0)%>%
+  st_as_sf(.,coords = c("Longitude","Latitude"),
+           crs=4326)
+```
+
+This part applies a pipeline operation to the dataset eiction_points. It is assumed that eiction_points is a data frame containing at least two columns: Longitude and Latitude.
+
+This filters the data to include only rows that satisfy the conditions:
+Longitude < 0: Longitude is less than 0, representing locations in the Western Hemisphere.
+Latitude > 0: Latitude is greater than 0, representing locations in the Northern Hemisphere.
+The result is points located in the northwest quadrant of the globe.
+st_as_sf() is a function from the sf package used to transform a data frame into a geospatial sf object.
+Parameters:
+.: Refers to the previous result in the pipeline (the filtered data).
+coords = c("Longitude", "Latitude"): Specifies that the Longitude and Latitude columns represent the geometric coordinates.
+crs = 4326: Specifies the Coordinate Reference System (CRS) as EPSG:4326, which is a widely-used geographic coordinate system (WGS84).
+```{r}
+tmap_mode("plot")
+tm_shape(communty_areas)+
+  tm_polygons(col=NA,alpha = 0.5)+
+tm_shape(points)+
+  tm_dots(col="blue")
+```
+
+```{r}
+communty_areas <- communty_areas%>%
+  st_transform(.,4326)
+points_sub<- points[communty_areas, ] #,st_intersects()
+```
+st_transform for CRS transformation
+
+Transforms the CRS of communty_areas to EPSG:4326, a global geographic coordinate system (latitude/longitude).
+Ensures consistency for spatial calculations, especially when different datasets have different CRS.
+points[communty_areas, ] for spatial subsetting
+
+This performs a spatial subset operation:
+Filters the points dataset to keep only those points that fall within the polygons in communty_areas.
+The result, points_sub, contains only the points located inside the communty_areas.
+
+```{r}
+points_sub_2020 <-points_sub%>%
+  clean_names()%>%
+  filter(str_detect(executed_date,"2020"))%>%
+  filter(residential_commercial=="Residential")
+```
+Clean column names: Convert column names to lowercase and replace spaces/special characters with underscores.
+Filter 2020 data: Select rows where executed_date contains "2020".
+Filter residential data: Further select rows where residential_commercial is "Residential".
+Result: The points_sub_2020 dataset contains only 2020 residential records.
+
+```{r}
+tmap_mode("plot")
+tm_shape(communty_areas)+
+  tm_polygons(col=NA,alpha = 0.5)+
+tm_shape(points_sub_2020)+
+  tm_dots(col="blue")
+```
+tmap_mode("plot")
+
+Sets the tmap mode to static map (plot), producing a non-interactive map.
+tm_shape(communty_areas)
+
+Defines the first map layer using communty_areas, a polygon dataset representing community areas.
+tm_polygons(col = NA, alpha = 0.5)
+
+Draws polygons for community areas:
+col = NA: Polygons have no fill color.
+alpha = 0.5: Polygons are 50% transparent.
+tm_shape(points_sub_2020)
+
+Adds a second layer with the points_sub_2020 dataset, representing points from 2020.
+tm_dots(col = "blue")
+
+Plots the points on the map:
+col = "blue": Points are colored blue.
+
+```{r}
+communty_areas_projected <- communty_areas %>%
+  st_transform(.,6538)
+points_sub_2020_projected <- points_sub_2020 %>%
+  st_transform(.,6538)
+
+window <- as.owin(communty_areas_projected) 
+plot(window)
+
+# create a sp object 
+points_sub_2020_projected_sp <- points_sub_2020_projected %>%
+  as(.,"Spatial")
+#create a ppp object
+points_sub_2020_projected_sp.ppp <-
+ppp(x=points_sub_2020_projected_sp@coords[,1],
+    y=points_sub_2020_projected_sp@coords[,2],
+    window =window)
+```
+Transforms the CRS of communty_areas and points_sub_2020 to EPSG:6538.
+EPSG:6538 is a projected coordinate system for precise spatial analysis.
+as.owin(): Converts communty_areas_projected to an owin object (analysis window).
+plot(window): Plots the boundary of the community areas to verify the spatial extent.
+Converts the point data from sf format to Spatial format, an older spatial data type.
+ppp(): Converts the point data into a point pattern analysis object.
+x and y: The x and y coordinates of the points.
+window: The analysis window defined by the community areas.
+
+```{r}
+K <- points_sub_2020_projected_sp.ppp %>%
+  Kest(.,correction="border") %>%
+  plot()
+```
+Black line above red dashed line
+
+The results indicate clustering in the point distribution, especially at smaller distance scales (when r is small).
+This suggests that points are more likely to occur in clusters rather than being randomly distributed.
+
+As r increases, the clustering trend becomes less pronounced but still remains above the random distribution level.
+Comparison Between Black Line (K_bord(r)) and Red Dashed Line (K_pois(r)):
+
+The black solid line (K_bord(r)) is consistently above the red dashed line (K_pois(r)) across most distance ranges.
+Meaning: Eviction events exhibit clustering, meaning the points are more concentrated than would be expected under a random distribution.
+Strong Clustering at Small Distances:
+
+At smaller values of r, the black line is significantly higher than the red line, indicating local clustering of eviction events within smaller spatial scales.
+Trends at Larger Distances:
+
+As r increases, the gap between the black and red lines narrows, but the black line remains above the red line. This suggests that evictions still exhibit some clustering, even over broader spatial ranges.
+Summary:
+
+Evictions are not randomly distributed but tend to form clusters, particularly at smaller distances. This may reflect underlying community characteristics (e.g., poverty rates, population density) or socioeconomic factors driving evictions.
+
+
+```{r}
+library(sp)
+library(dbscan)
+library(fpc)
+
+#first extract the points from the spatial data frame
+points_todf <- points_sub_2020_projected_sp %>%
+coordinates(.) %>%
+as.data.frame()
+
+#now run the dbscan analysis
+points_todf_DBSCAN <- points_todf %>%
+fpc::dbscan(.,eps=1000,MinPts=50) 
+#Eps=1000: Set the maximum proximity distance between points (1000 meters).MinPts=50: Set the minimum number of points for each cluster (at least 50 points form a cluster).
+points_todf %>%
+dbscan::kNNdistplot(.,k=50)
+#Calculate the distance between each point and its 50th nearest neighbor
+ 
+plot(points_todf_DBSCAN,points_todf,main="DBSCAN output",frame=F)
+plot(communty_areas_projected$geometry,add=T)
+```
+
+Image Description
+Background: The map shows New York City community boundaries, overlaid with the results of DBSCAN clustering analysis.
+Point Markings:
+Different colors (e.g., red, green, blue, purple) represent clustering results (high-density eviction areas).
+Black hollow points represent noise, which are points not assigned to any cluster and likely indicate isolated or low-density eviction events.
+
+Clustering Results
+Red, Green, Blue, and Purple Clusters:
+These regions represent areas with a high density of evictions, suggesting severe eviction issues in these communities.
+This clustering might correlate with socioeconomic conditions, policy enforcement, or population distribution in these areas.
+Noise Points (Black Hollow Points):
+These are widely distributed and represent isolated eviction events, likely occurring in low-density or special locations.
+
+Spatial Distribution Patterns
+Core Clustering Areas:
+The red and green clusters on the map highlight significant areas, possibly economically stressed communities.
+Isolated Regions:
+Noise points are spread out and tend to occur farther from central areas, potentially representing random or isolated events.
+
+Evictions are primarily concentrated within specific communities, showing significant spatial clustering.
+Isolated eviction events are more dispersed.
+
+   
+```{r}
+
+#Attach DBSCAN clustering results to points_todf
+points_todf$dbcluster <- points_todf_DBSCAN$cluster
+
+tosf <- points_todf %>%
+st_as_sf(., coords = c("coords.x1","coords.x2"),
+crs =6538) %>%
+  filter(dbcluster>0)#Filters out noise points (dbcluster = 0) to retain only points belonging to valid clusters.
+```
+
+
+```{r}
+ggplot(data = communty_areas_projected)+
+  geom_sf()+
+  geom_sf(data=tosf,size= 0.4,color=tosf$dbcluster,
+          fill=tosf$dbcluster)
+  
+```
+Red Cluster:
+Located in the northern part of New York City (likely the Bronx or Upper Manhattan), indicating a hotspot of eviction events.
+Green and Blue Clusters:
+Concentrated in the southern part of Brooklyn, another major eviction hotspot.
+Noise Points (Black):
+Scattered across the map, especially outside Manhattan and Brooklyn, representing isolated eviction events.
+Black noise points are scattered and represent isolated eviction events with no spatial association to other events
+
+```{r}
+#Performs a spatial join between community areas (communty_areas_projected) and eviction points (tosf).
+check_example <- communty_areas_projected%>%
+  st_join(tosf)
+
+points_sf_joined <- communty_areas_projected%>%
+  mutate(n=lengths(st_intersects(.,tosf)))%>%#Finds spatial intersections between community areas and eviction points.
+  clean_names()%>%
+  mutate(area=st_area(.)) %>%#Computes the area of each community (in units matching the CRS).
+  mutate(density=n/area)#Calculates the eviction density by dividing the number of eviction points by the area of each community.
+```
+
+```{r}
+tm_shape(points_sf_joined)+
+  tm_polygons("density",
+              style="jenks",
+              palette="PuOr",
+              title="Eviction density")
+```
+
+Image Description
+Background Map: Displays the community district boundaries of New York City.
+Color Fill:
+Different shades represent different ranges of eviction density.
+From light colors to dark purple, the eviction density increases.
+The legend shows the specific eviction density values (measured as the number of evictions per unit area).
+
+Eviction Density Hotspots:Dark purple areas are concentrated in the northern parts of New York City (likely the Bronx or Upper Manhattan).These areas exhibit significantly higher eviction density and are identified as core hotspots for evictions.
+Medium-Low Density Areas:Light yellow areas cover most of the map, indicating lower eviction densities.These areas might face less socioeconomic pressure or benefit from stronger policy support.
+Blank Areas:Some districts appear blank (no color fill), potentially representing no recorded eviction events or insufficient data for density calculation.
+
+Spatial Distribution Patterns
+The spatial distribution of eviction events is highly uneven:
+Hotspot areas are highly concentrated, potentially linked to high population density, low-income households, or policy enforcement gaps.
+Low-density or blank areas may represent higher-income neighborhoods or more stable rental markets.
+```{r}
+library(spdep)
+coordsw <-points_sf_joined %>%
+  st_centroid()%>% 
+  #Computes the geometric centroids for each community area in points_sf_joined.The centroid represents the center point of each polygon.
+  st_geometry() #Extracts the geometric information (coordinates) of the centroids.
+plot(coordsw,axes=TRUE)
+
+#make neighbours
+
+community_nb <- points_sf_joined %>%
+  poly2nb(.,queen=T) #Generates an adjacency list for the polygons, describing which community areas are neighbors.
+summary(community_nb)
+#Plots the adjacency relationships on the map.
+Red lines connect centroids of adjacent community areas.
+plot(community_nb,st_geometry(coordsw),col="red")
+#Overlays the actual community boundaries (polygons) on the same map to provide spatial context.
+plot(points_sf_joined$geometry,add=T)
+
+```
+A cluster of points near coordinates (around 300000, 70000) likely corresponds to central New York City regions (e.g., Manhattan).Outlying points represent farther communities, possibly in Queens, Staten Island, or the Bronx.
+
+
+```{r}
+#make weight matrix
+community_nb.lw <- community_nb %>%
+  nb2mat(.,style ="W")
+
+sum(community_nb.lw)
+
+```
+This means there are 71 neighbor relationships between communities.
+Each neighbor relationship corresponds to a pair of communities sharing a boundary or vertex, as determined by the "Queen contiguity rule."
+
+```{r}
+#Converts the community adjacency list (community_nb) into a spatial weight matrix.
+#style = "W": Creates a row-standardized weight matrix where the sum of each row equals 1.
+community_nb.lw <- nb2listw(community_nb, zero.policy = TRUE)
+```
+
+```{r}
+
+I_LWard_Global_Density <- points_sf_joined %>%
+  pull(density)%>%
+  as.vector()%>%
+  localmoran(.,community_nb.lw)#Computes Local Moran's I index for each community to analyze local spatial autocorrelation.
+I_LWard_Global_Density
+```
+Ii (Local Moran's I):
+
+Measures the strength of local spatial autocorrelation:
+Positive value: The community has positive spatial autocorrelation (e.g., high-high or low-low clusters).
+Negative value: The community has negative spatial autocorrelation (e.g., high-low or low-high relationships).
+E.Ii (Expected Value):
+
+Theoretical expected value of Moran's I under a random distribution.
+Var.Ii (Variance):
+
+Variance of Moran's I, used to evaluate the reliability of the index.
+Z.Ii and Pr(Ii):
+
+Z.Ii: Standardized Moran's I value for hypothesis testing.
+Pr(Ii): p-value for the Local Moran's I statistic, indicating statistical significance.
+```{r}
+points_sf_joined <- points_sf_joined %>%
+  mutate(density_I = as.numeric(I_LWard_Global_Density[, "Ii"])) %>%
+  mutate(density_Iz = as.numeric(I_LWard_Global_Density[, "Z.Ii"]))
+```
+
+
+```{r}
+breaks1 <- c(-100, -2.58, -1.96, -1.65, 1.65, 1.96, 2.58, 1000)
+
+library(RColorBrewer)
+MoranColours <- rev(brewer.pal(8, "RdGy"))
+
+tm_shape(points_sf_joined) +
+    tm_polygons("density_Iz",
+        style = "fixed",
+        breaks = breaks1,
+        palette = MoranColours,
+        midpoint = NA,
+        title = "Local Moran's I, Evictions in New York")
+```
+#breaks1 defines the intervals for grouping the density_Iz values of Local Moran's I Z-scores:
+(-100, -2.58): Significant low-value outliers (coldspots).
+(-2.58, -1.96): Potentially significant low values.
+(-1.96, -1.65): Marginal low values.
+(1.65, 1.96): Marginal high values.
+(1.96, 2.58): Potentially significant high values.
+(2.58, 1000): Significant high-value outliers (hotspots).
+
+Hotspot Areas:The red areas are concentrated in the Bronx and parts of Manhattan.
+This indicates significantly higher eviction densities in these communities compared to their neighbors, likely due to socioeconomic conditions, policies, or population density.
+
+Key insights: Spatial clustering.
+The presence of significant hotspots indicates areas where eviction prevention measures are urgently required. These clusters are not distributed randomly; rather, they are spatially concentrated in socioeconomically vulnerable areas.
+Policy implications:
+Hotspot areas, such as the Bronx and Upper Manhattan, may benefit from targeted interventions such as rental assistance programs, legal representation for tenants, and stricter enforcement of housing regulations.
+Learning from coldspot areas, which are likely to have effective policies or more stable rental markets, can help inform strategies for reducing evictions in hotspot regions.
+Socioeconomic Factors:
+The clustering of high eviction densities points to underlying socioeconomic disparities. Unemployment, poverty, and housing affordability are likely to be important drivers of these trends.
+Conclusion
+The spatial analysis of eviction patterns in New York City reveals a significant concentration of high eviction densities in specific neighborhoods, particularly the Bronx and Upper Manhattan. These findings highlight the importance of geographically targeted policies to address housing instability and reduce evictions in these areas. Future research could look into the specific socioeconomic or policy factors driving these patterns in order to better inform intervention strategies.
+

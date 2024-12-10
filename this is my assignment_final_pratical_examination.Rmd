@@ -117,7 +117,7 @@ Adds a second layer with the points_sub_2020 dataset, representing points from 2
 tm_dots(col = "blue")
 
 Plots the points on the map:
-col = "blue": Points are colored blue.
+col = "blue": Points are colored blue.。
 
 ```{r}
 communty_areas_projected <- communty_areas %>%
@@ -381,6 +381,67 @@ Hotspot areas, such as the Bronx and Upper Manhattan, may benefit from targeted 
 Learning from coldspot areas, which are likely to have effective policies or more stable rental markets, can help inform strategies for reducing evictions in hotspot regions.
 Socioeconomic Factors:
 The clustering of high eviction densities points to underlying socioeconomic disparities. Unemployment, poverty, and housing affordability are likely to be important drivers of these trends.
+
+
+
+```{r}
+
+nyc_crime  <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/casa0005-practice-exam-2024-25-lrxzyx-main/NYC_crime.csv",na=c(" "))
+
+```
+Data soure is:(NYC Crime Dataset) https://data.cityofnewyork.us/Public-Safety/NYC-crime/qb7u-rbmr
+This dataset contains crime data reported by five boroughs of New York City from 2014 to 2015, which helps analyze crime trends.
+
+```{r}
+#Summarize the number of criminal incidents by administrative region
+nyc_crime_summary <- nyc_crime %>%
+  group_by(BORO_NM) %>%
+  summarise(crime_count = n()) %>%
+  mutate(crime_rate = crime_count / sum(crime_count)) #Calculate crime rate
+
+```
+
+
+```{r}
+#Ensure consistency of administrative district names for data expulsion
+eiction_points <- eiction_points %>%
+  mutate(BOROUGH = toupper(BOROUGH))#Convert to uppercase
+```
+
+```{r}
+#Merge crime rate and eviction data by administrative district name
+merged_data <- eiction_points %>%
+  left_join(nyc_crime_summary, by = c("BOROUGH" = "BORO_NM"))
+```
+
+```{r}
+colnames(merged_data)
+```
+
+```{r}
+##Convert variables to numerical types
+merged_data <- merged_data %>%
+  mutate(
+    Census Tract = as.numeric(Census Tract), 
+    crime_rate = as.numeric(crime_rate)
+  )
+#Remove rows containing NA
+merged_data <- merged_data %>%
+  filter(!is.na(Census Tract) & !is.na(crime_rate))
+
+```
+
+```{r}
+
+##Assuming 'density' is eviction density and 'crime_rate' is crime rate
+lm_model <- lm(density ~ crime_rate, data = merged_data)
+summary(lm_model)
+```
+
+```{r}
+
+```
+
 Conclusion
 The spatial analysis of eviction patterns in New York City reveals a significant concentration of high eviction densities in specific neighborhoods, particularly the Bronx and Upper Manhattan. These findings highlight the importance of geographically targeted policies to address housing instability and reduce evictions in these areas. Future research could look into the specific socioeconomic or policy factors driving these patterns in order to better inform intervention strategies.
 

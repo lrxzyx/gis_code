@@ -238,7 +238,7 @@ points(QCountTable$Expected, col="Blue",
        type="o", 
        lwd=3)
 ```
-The distribution  is primarily concentrated in areas with fewer plaques (1 plaque), where observed values are significantly higher than expected values.As the number of plots increases (2 or more), the observed values gradually approach the expected values, indicating a more stable distribution.This suggests that the distribution of plot may be clustered, with certain areas having fewer plots.
+ The distribution  is primarily concentrated in areas with fewer plaques (1 plaque), where observed values are significantly higher than expected values.As the number of plots increases (2 or more), the observed values gradually approach the expected values, indicating a more stable distribution.This suggests that the distribution of plot may be clustered, with certain areas having fewer plots. 
 ```{r}
 library(sp)
 library(dbscan)

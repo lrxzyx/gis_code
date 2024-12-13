@@ -34,6 +34,12 @@ https://geoportal.statistics.gov.uk/datasets/2bbaef5230694f3abae4f9145a3a9800_0/
 #View the first few lines of data to understand the structure
 head(census_health)
 ```
+```{r}
+points <- census_health %>%
+  st_as_sf(.,coords = c("Longitude","Latitude"),
+           crs=4326)
+```
+
 
 ```{r Merge two data}
 merged_data <- boundary %>%
@@ -170,9 +176,29 @@ points(QCountTable$Expected, col="Blue",
 ```
 Observed shows the real data that was collected, which shows how common the "very healthy" population is in Manchester across different groups. For instance, the number of observations in the first group is greater and slowly goes down after that. Blue (Expected) shows the frequency that was found using a statistical model or a theory of expectations. The expected value goes up slowly as the group changes, which is clearly not the same as the measured value shown in red.
 
-```{r}
+```{r DBSCAN's clustering}
+library(dbscan)
+library(fpc)
 
+#first extract the points from the spatial data frame
+points_todf <- manchester_data_very_sp %>%
+coordinates(.) %>%
+as.data.frame()
+
+#now run the dbscan analysis
+points_todf_DBSCAN <- points_todf %>%
+fpc::dbscan(.,eps=1000,MinPts=50) 
+
+#Eps=1000: Set the maximum proximity distance between points (1000 meters).MinPts=50: Set the minimum number of points for each cluster (at least 50 points form a cluster).
+
+points_todf %>%
+dbscan::kNNdistplot(.,k=50)
+#Calculate the distance between each point and its 50th nearest neighbor
+ 
+plot(points_todf_DBSCAN,points_todf,main="DBSCAN output",frame=F)
+plot(boundary$geometry,add=T)
 ```
+The picture displays DBSCAN's clustering results, but it is currently disorganized and unable to tell the difference between groups. This suggests that either the parameters (like eps and minPts) have not been optimized or the data distribution is not right for DBSCAN. DBSCAN works well with data that has big differences between areas that are thin and areas that are dense. If the data is too dense or spread out too evenly, the result might not be very good.
 
 ```{r}
 

@@ -28,9 +28,37 @@ boundary <- st_read("/Users/liruixuan/Desktop/UCL/GIS/examination/examination/Lo
 data:
 LSOA (Lower Layer Super Output Area)
 boundary data is too large to upload:
-https://geoportal.statistics.gov.uk/datasets/2bbaef5230694f3abae4f9145a3a9800_0/explore  (shapefile)
+https://geoportal.statistics.gov.uk/datasets/2bbaef5230694f3abae4f9145a3a9800_0/explore  (shapefile) I removed all parentheses from the file name for easy reading of data
 
 ```{r}
+#View the first few lines of data to understand the structure
+head(census_health)
+```
+
+```{r Merge two data}
+merged_data <- boundary %>%
+  left_join(census_health, by = c("LSOA21CD" = "geography code"))
+```
+
+```{r filter data}
+#Filter out Manchester data
+manchester_data <- merged_data %>%
+  filter(grepl("Manchester", LSOA21NM, ignore.case = TRUE))
+```
+
+```{r tmap}
+#Create a map
+tm_shape(manchester_data) +
+  tm_polygons("General health: Total: All usual residents", 
+              title = "Health Status in Manchester") +
+  tm_layout(main.title = "Health in Manchester")
+```
+
+```{r}
+window <- as.owin(manchester_data) 
+plot(window)
+```
+```{r create a sp objec}
 
 ```
 

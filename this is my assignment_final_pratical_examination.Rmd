@@ -15,9 +15,9 @@ How do eviction patterns in New York City vary spatially, and which areas exhibi
 
 
 Introduction
-Evictions are a pressing issue in New York City, disrupting lives and destabilizing communities, particularly in low-income areas. Understanding the spatial patterns of evictions is crucial for developing effective, targeted policies to address housing instability.
+Evictions are a big problem in New York City. They mess up people's lives and make neighborhoods less stable, especially in low-income areas. To make effective, tailored policies to deal with housing instability, it is important to know how evictions happen in different areas.
 
-This study analyzes the 2020 eviction data across New York City’s community districts, focusing on identifying clusters of high and low eviction densities using Local Moran’s I. The goal is to uncover geographic hotspots and coldspots of eviction activity, providing insights to guide policy interventions aimed at reducing evictions and supporting at-risk communities.
+This research looks at the 2020 eviction data from all of New York City's neighborhood districts with the main goal of finding groups of high and low eviction densities using Local Moran's I. The idea is to find the geographic hotspots and coldspots of eviction activity. This will help policymakers make decisions about how to stop evictions and help communities that are at risk.
 
 # Start your response here
 ```{r}

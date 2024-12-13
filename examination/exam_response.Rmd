@@ -26,18 +26,13 @@ boundary <- st_read("/Users/liruixuan/Desktop/UCL/GIS/examination/examination/Lo
 
 ```
 data:
-LSOA (Lower Layer Super Output Area)
+LSOA (Lower Layer Super Output Area) 2021
 boundary data is too large to upload:
 https://geoportal.statistics.gov.uk/datasets/2bbaef5230694f3abae4f9145a3a9800_0/explore  (shapefile) I removed all parentheses from the file name for easy reading of data
 
 ```{r}
 #View the first few lines of data to understand the structure
 head(census_health)
-```
-```{r}
-points <- census_health %>%
-  st_as_sf(.,coords = c("Longitude","Latitude"),
-           crs=4326)
 ```
 
 
@@ -62,6 +57,8 @@ manchester_data_very <- manchester_data %>%
   select(-"General health: Good health",-"General health: Fair health",
          -"General health: Bad health",-"General health: Very bad health")
 ```
+
+
 
 ```{r tmap}
 #Create a map
@@ -199,6 +196,87 @@ plot(points_todf_DBSCAN,points_todf,main="DBSCAN output",frame=F)
 plot(boundary$geometry,add=T)
 ```
 The picture displays DBSCAN's clustering results, but it is currently disorganized and unable to tell the difference between groups. This suggests that either the parameters (like eps and minPts) have not been optimized or the data distribution is not right for DBSCAN. DBSCAN works well with data that has big differences between areas that are thin and areas that are dense. If the data is too dense or spread out too evenly, the result might not be very good.
+```{r}
+colnames(merged_data)
+```
+
+
+```{r}
+#Convert to sf object
+manchester_data_very_sf <- st_as_sf(manchester_data_very_sp)
+```
+
+```{r}
+colnames(manchester_data_very_sf)
+```
+
+
+```{r}
+points_sf <- manchester_data_very_sf %>%
+  clean_names()%>%
+  mutate(area=st_area(.)) %>%#Computes the area of each community (in units matching the CRS).
+  mutate(density=general_health_very_good_health/general_health_total_all_usual_residents)#Calculates the eviction density by dividing the number of eviction points by the area of each community.
+```
+
+```{r}
+tm_shape(points_sf)+
+  tm_polygons("density",
+              style="jenks",
+              palette="PuOr",
+              title="Eviction density")
+```
+
+```{r}
+
+```
+
+
+
+
+```{r}
+library(spdep)
+coordsw <-manchester_data_very_sf %>%
+  st_centroid()%>% 
+  #Computes the geometric centroids for each community area in manchester_data_very_sp.The centroid represents the center point of each polygon.
+  st_geometry() #Extracts the geometric information (coordinates) of the centroids.
+plot(coordsw,axes=TRUE)
+
+#make neighbours
+
+community_nb <- manchester_data_very_sf %>%
+  poly2nb(.,queen=T) #Generates an adjacency list for the polygons, describing which community areas are neighbors.
+summary(community_nb)
+#Plots the adjacency relationships on the map.
+#Red lines connect centroids of adjacent community areas.
+plot(community_nb,st_geometry(coordsw),col="red")
+#Overlays the actual community boundaries (polygons) on the same map to provide spatial context.
+plot(manchester_data_very_sp$geometry,add=T)
+  
+```
+
+```{r}
+#make weight matrix
+community_nb.lw <- community_nb %>%
+  nb2mat(.,style ="W")
+
+sum(community_nb.lw)
+```
+This means there are 295 neighbor relationships between communities.
+
+
+```{r}
+#Converts the community adjacency list (community_nb) into a spatial weight matrix.
+#style = "W": Creates a row-standardized weight matrix where the sum of each row equals 1.
+community_nb.lw <- nb2listw(community_nb, zero.policy = TRUE)
+```
+
+```{r}
+I_LWard_Global_Density <- manchester_data_very_sf %>%
+  pull(density)%>%
+  as.vector()%>%
+  localmoran(.,community_nb.lw)#Computes Local Moran's I index for each community to analyze local spatial autocorrelation.
+I_LWard_Global_Density
+```
 
 ```{r}
 

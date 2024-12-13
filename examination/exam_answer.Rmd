@@ -102,7 +102,7 @@ summary(manchester_data_very_sp_ppp)
 #Visualization
 plot(manchester_data_very_sp_ppp, main = "Point Pattern of Manchester Data")
 ```
-I really don't know how to create its coordinate points, so the solution GB T gave me is to use the centroid method.
+I really don't know how to create its coordinate points, so the solution GPT gave me is to use the centroid method.
 
 ```{r Ripley’s K}
 K <- manchester_data_very_sp_ppp %>%

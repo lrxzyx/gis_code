@@ -215,21 +215,17 @@ colnames(manchester_data_very_sf)
 points_sf <- manchester_data_very_sf %>%
   clean_names()%>%
   mutate(area=st_area(.)) %>%#Computes the area of each community (in units matching the CRS).
-  mutate(density=general_health_very_good_health/general_health_total_all_usual_residents)#Calculates the eviction density by dividing the number of eviction points by the area of each community.
+  mutate(percentage=general_health_very_good_health/general_health_total_all_usual_residents)#Calculates the percentage people with very good health density by dividing the number of total all usual residents by the area of each community.
 ```
 
 ```{r}
 tm_shape(points_sf)+
-  tm_polygons("density",
+  tm_polygons("percentage",
               style="jenks",
               palette="PuOr",
-              title="Eviction density")
+              title="The percentage people with very good health")
 ```
-
-```{r}
-
-```
-
+This graph shows how the number of very healthy people in each area of Manchester is spread out across space. For illustration, a color gradient from orange (low percentage) to purple (high percentage) shows how the health level in different areas is very different. The areas with higher health ratios are mostly in the city center and some surrounding areas. These areas may have better economic conditions, better access to medical resources, and a better place to live. On the other hand, the areas with lower ratios are mostly on the southern and northern edges of the city, where resources may be scarce or the environment may not be good. In general, the level of health is not spread out evenly in Manchester. This means that places with low health levels should get more medical resources and government intervention.
 
 
 
@@ -271,15 +267,35 @@ community_nb.lw <- nb2listw(community_nb, zero.policy = TRUE)
 ```
 
 ```{r}
-I_LWard_Global_Density <- manchester_data_very_sf %>%
-  pull(density)%>%
+I_LWard_Global_Density <- points_sf %>%
+  pull(percentage)%>%
   as.vector()%>%
   localmoran(.,community_nb.lw)#Computes Local Moran's I index for each community to analyze local spatial autocorrelation.
 I_LWard_Global_Density
 ```
 
 ```{r}
-
+points_sf <- points_sf %>%
+  mutate(density_I = as.numeric(I_LWard_Global_Density[, "Ii"])) %>%
+  mutate(density_Iz = as.numeric(I_LWard_Global_Density[, "Z.Ii"]))
 ```
 
-## Initial project scope
+
+```{r}
+breaks1 <- c(-100, -2.58, -1.96, -1.65, 1.65, 1.96, 2.58, 1000)
+
+library(RColorBrewer)
+MoranColours <- rev(brewer.pal(8, "RdGy"))
+
+tm_shape(points_sf) +
+    tm_polygons("density_Iz",
+        style = "fixed",
+        breaks = breaks1,
+        palette = MoranColours,
+        midpoint = NA,
+        title = "Local Moran's I, The percentage people with very good health")
+```
+The pattern of regional autocorrelation for the number of very healthy people in Manchester is shown by this Local Moran's I map. There are a lot of dark red areas (high high concentration areas) in the south and some central areas. These areas have a high health proportion and are surrounded by other high health proportion areas that may have better economic conditions, medical resources, and living conditions. On the other hand, there are a lot of light blue or gray areas (low low or low high concentration areas) on the edges of the city. These areas have low health levels and are affected by not having enough resources and infrastructure. This amazing difference in space shows how unevenly health is distributed in Manchester.
+
+Report
+

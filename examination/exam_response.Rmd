@@ -5,5 +5,33 @@ I, [**Ruixuan Li**], confirm that the work presented in this assessment is my ow
 
 # Start your response here
 
+```{r load libraries}
+library(readr)
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(spdep)
+library(spatstat)
+library(sp)
+library(tmap)
+library(tmaptools)
+library(janitor)
+library(tidyverse)
+```
+
+```{r data reading}
+census_health <- read_csv("/Users/liruixuan/Desktop/UCL/GIS/examination/examination/census2021-ts037-lsoa.csv",na=c(" "))
+
+boundary <- st_read("/Users/liruixuan/Desktop/UCL/GIS/examination/examination/Lower_layer_Super_Output_Areas_December_2021_Boundaries_EW_BFC_V10/Lower_layer_Super_Output_Areas_December_2021_Boundaries_EW_BFC_V10.shp")
+
+```
+data:
+LSOA (Lower Layer Super Output Area)
+boundary data is too large to upload:
+https://geoportal.statistics.gov.uk/datasets/2bbaef5230694f3abae4f9145a3a9800_0/explore  (shapefile)
+
+```{r}
+
+```
 
 ## Initial project scope
